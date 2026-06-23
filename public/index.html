@@ -1,253 +1,230 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>The Herald - Admin</title>
-  <style>
-    :root {
-      --bg: #111827; --surface: #1f2937; --text: #f9fafb; --text-muted: #9ca3af;
-      --primary: #3b82f6; --primary-hover: #2563eb; --border: #374151;
-      --danger: #ef4444; --success: #10b981;
-    }
-    * { box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg); color: var(--text); margin: 0; padding: 20px;
-      line-height: 1.5;
-    }
-    .container { max-width: 600px; margin: 0 auto; }
-    .card {
-      background-color: var(--surface); border-radius: 8px; padding: 24px;
-      margin-bottom: 24px; border: 1px solid var(--border);
-    }
-    h1, h2 { margin-top: 0; }
-    .form-group { margin-bottom: 16px; }
-    label { display: block; margin-bottom: 4px; font-size: 0.875rem; color: var(--text-muted); }
-    input, select, textarea {
-      width: 100%; padding: 8px 12px; border-radius: 4px; border: 1px solid var(--border);
-      background-color: var(--bg); color: var(--text); font-family: inherit;
-    }
-    button {
-      background-color: var(--primary); color: white; border: none; padding: 8px 16px;
-      border-radius: 4px; cursor: pointer; font-weight: 500;
-    }
-    button:hover { background-color: var(--primary-hover); }
-    button.danger { background-color: var(--danger); }
-    .hidden { display: none; }
-    #message { padding: 12px; border-radius: 4px; margin-bottom: 16px; display: none; }
-    #message.success { background-color: rgba(16, 185, 129, 0.2); color: var(--success); display: block; }
-    #message.error { background-color: rgba(239, 68, 68, 0.2); color: var(--danger); display: block; }
-    .post-item {
-      padding: 12px; border: 1px solid var(--border); border-radius: 4px; margin-bottom: 12px;
-    }
-    .post-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; justify-content: space-between; }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Herald — announcements &amp; live hours for your website</title>
+<meta name="description" content="The Herald keeps your website fresh: your latest Instagram &amp; Facebook posts show up automatically, plus announcements and live hours — from one tiny script, matched to your brand. By Forever Still Studio." />
+<meta property="og:title" content="The Herald — keep your website fresh, automatically" />
+<meta property="og:description" content="Your Instagram &amp; Facebook posts, announcements, and live hours — live on the website you already have. One tiny script, no builder login. By Forever Still Studio." />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="The Herald" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23121212'/%3E%3Cg fill='%23C8A96A'%3E%3Cpath d='M22 44 H32 L62 30 V70 L32 56 H22 Z M40 56 h11 v9 a5.5 5.5 0 0 1 -11 0 Z'/%3E%3Cpath d='M70 38 q10 12 0 24 l-3 -2 q8 -10 0 -20 Z M78 32 q16 18 0 36 l-3 -2 q13 -16 0 -32 Z'/%3E%3C/g%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Montserrat:wght@300;400;500;600;700&family=Tangerine:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#121212; --bg-soft:#161616; --bg-warm:#1c1a18;
+    --gold:#C8A96A; --gold-dim:#a8894a; --gold-ink:#7a6228;
+    --blush:#d4a5a5;
+    --text:#F4EDE0; --text-muted:#b9ad9f; --text-soft:#E8DFD0;
+    --rule:rgba(200,169,106,0.30);
+    --cream:#F4EDE0; --ink:#1A1A1A; --ink-soft:#4a423a;
+    --font-display:'Cormorant Garamond',Georgia,serif;
+    --font-script:'Tangerine',cursive;
+    --font-sans:'Montserrat',system-ui,sans-serif;
+    --max-w:1080px;
+  }
+  html{scroll-behavior:smooth}
+  body{font-family:var(--font-sans);color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased;line-height:1.7;overflow-x:hidden}
+  a{color:inherit;text-decoration:none}
+  .container{width:100%;max-width:var(--max-w);margin:0 auto;padding:0 40px}
+  .container--narrow{max-width:720px}
+  section{padding:96px 0;position:relative}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.28em;text-transform:uppercase;color:var(--gold)}
+  .rule{width:48px;height:1px;background:var(--gold);margin:18px auto 26px}
+  h2{font-family:var(--font-display);font-weight:300;line-height:1.12}
+  em{font-style:italic}
+
+  .btn{display:inline-block;font-family:var(--font-sans);font-size:11px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;padding:14px 32px;border:1px solid currentColor;cursor:pointer;transition:background .25s,color .25s}
+  .btn--p{background:var(--gold);border-color:var(--gold);color:#121212}
+  .btn--p:hover{background:transparent;color:var(--gold)}
+  .btn--g{background:transparent;border-color:var(--gold);color:var(--gold)}
+  .btn--g:hover{background:var(--gold);color:#121212}
+
+  .nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 0;transition:background .4s}
+  .nav.scrolled{background:rgba(13,11,11,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--rule)}
+  .nav__in{display:flex;align-items:center;justify-content:space-between}
+  .lock{display:flex;align-items:center;gap:12px}
+  .lock__mark{width:42px;height:42px;flex:none}
+  .lock__name{font-family:var(--font-display);font-size:24px;font-weight:400;color:var(--text);line-height:1}
+  .lock__sub{font-size:8.5px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:var(--gold);margin-top:4px}
+  .navcta{display:inline-flex;align-items:center;min-height:40px;font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);border:1px solid var(--gold);padding:0 22px;transition:background .2s,color .2s}
+  .navcta:hover{background:var(--gold);color:var(--bg)}
+
+  .hero{min-height:92vh;display:flex;align-items:center;text-align:center;overflow:hidden;padding:140px 0 70px}
+  .hero__glow{position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.6}
+  .hero__glow::before{content:"";position:absolute;inset:0;background:radial-gradient(50% 42% at 50% -2%,color-mix(in srgb,var(--gold) 30%,transparent),transparent 64%),radial-gradient(46% 38% at 50% 108%,color-mix(in srgb,var(--gold) 24%,transparent),transparent 62%)}
+  .sparkles{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+  .sparkles .spk{position:absolute;color:var(--gold);opacity:0;animation:spk var(--dur,10s) ease-in-out infinite;animation-delay:var(--delay,0s)}
+  .sparkles .spk svg{display:block;width:100%;height:100%;fill:currentColor}
+  @keyframes spk{0%{opacity:0;transform:translateY(12px) scale(.6)}20%,80%{opacity:var(--max,.55)}50%{opacity:var(--max,.55);transform:translateY(-14px) scale(1) rotate(18deg)}100%{opacity:0;transform:translateY(-34px) scale(.6)}}
+  .hero__in{position:relative;z-index:2}
+  .script{font-family:var(--font-script);font-size:42px;line-height:1.15;color:var(--gold);display:block;margin-bottom:4px}
+  .tag{font-family:var(--font-display);font-size:clamp(44px,6.6vw,78px);font-weight:300;line-height:1.05;letter-spacing:-.01em;color:var(--text);margin-bottom:22px}
+  .tag em{color:var(--blush)}
+  .head{font-family:var(--font-sans);font-size:13px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);opacity:.85;margin-bottom:1.6rem}
+  .sub{font-size:16px;font-weight:300;color:var(--text-muted);line-height:1.85;max-width:620px;margin:0 auto 38px}
+  .ctas{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+  .trust{margin-top:30px;font-size:12px;color:var(--text-muted);letter-spacing:.08em}
+
+  .cream{background:var(--cream);color:var(--ink);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+  .cream h2{color:var(--ink)}
+  .cream h2 em{color:var(--gold-ink)}
+  .cream .eyebrow{color:var(--gold-ink)}
+  .sec{text-align:center;margin-bottom:3.2rem}
+  .sec h2{font-size:clamp(2rem,4.4vw,3rem);margin-top:.3rem}
+
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule)}
+  .step{background:var(--cream);padding:2.4rem;transition:background .2s}
+  .step:hover{background:#efe6d6}
+  .step .n{font-family:var(--font-display);font-style:italic;font-size:2.6rem;color:var(--gold-ink);line-height:1;margin-bottom:.5rem}
+  .step h3{font-family:var(--font-display);color:var(--ink);font-size:1.45rem;font-weight:400;margin-bottom:.4rem}
+  .step p{color:var(--ink-soft);font-size:14px;line-height:1.8}
+  .step code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:rgba(122,98,40,.1);border:1px solid rgba(168,137,74,.3);border-radius:4px;padding:1px 6px;color:var(--gold-ink)}
+
+  .why{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule)}
+  .why .card{display:flex;gap:1.1rem;background:var(--cream);padding:2rem;transition:background .2s}
+  .why .card:hover{background:#efe6d6}
+  .why .ic{width:46px;height:46px;flex:none;border-radius:50%;background:#121212;display:flex;align-items:center;justify-content:center}
+  .why .ic svg{width:22px;height:22px;stroke:var(--gold);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .why h4{font-family:var(--font-display);color:var(--ink);font-size:1.35rem;font-weight:400;margin-bottom:.25rem}
+  .why p{color:var(--ink-soft);font-size:14px;line-height:1.75}
+
+  .family{text-align:center;padding:80px 0}
+  .family .eyebrow{color:var(--gold)}
+  .family h2{font-size:clamp(1.8rem,3.6vw,2.6rem);color:var(--text);margin:1rem 0}
+  .family h2 em{color:var(--blush)}
+  .family p{font-size:15px;color:var(--text-muted);max-width:580px;margin:0 auto;line-height:1.85}
+  .sibs{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:1.6rem}
+  .sib{font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--text-soft);border:1px solid var(--rule);padding:8px 18px}
+  .sib b{color:var(--gold);font-weight:600}
+
+  .cta{text-align:center;border-top:1px solid var(--rule)}
+  .cta__script{font-family:var(--font-script);font-size:46px;color:var(--gold);line-height:1;margin-bottom:6px}
+  .cta h2{font-family:var(--font-display);font-weight:300;font-size:clamp(2.2rem,4.6vw,3.4rem);color:var(--text);margin-bottom:1rem}
+  .cta h2 em{color:var(--blush)}
+  .cta p{color:var(--text-muted);max-width:520px;margin:0 auto 2.2rem;font-size:15px;line-height:1.85}
+  .cta__alt{margin-top:1.4rem;font-size:13px;color:var(--text-muted)}
+  .cta__alt a{color:var(--gold);border-bottom:1px solid var(--rule);padding-bottom:2px}
+
+  footer{padding:2.75rem 0;border-top:1px solid var(--rule);text-align:center}
+  .foot__mark{width:38px;height:38px;margin:0 auto .7rem}
+  .foot__brand{font-family:var(--font-display);font-size:1.6rem;color:var(--text)}
+  .foot__brand span{color:var(--gold)}
+  footer p{font-size:12px;letter-spacing:.06em;color:var(--text-muted);margin-top:.5rem}
+  footer a{color:var(--gold)}
+
+  @media(max-width:860px){.steps,.why{grid-template-columns:1fr;gap:1px}}
+  @media(max-width:768px){section{padding:72px 0}.container{padding:0 24px}.ctas{flex-direction:column}.ctas .btn{text-align:center}}
+  @media(prefers-reduced-motion:reduce){.sparkles .spk{animation:none}}
+</style>
 </head>
 <body>
-  <div class="container">
-    <h1>The Herald</h1>
-    <div id="message"></div>
 
-    <!-- Login Form -->
-    <div id="loginSection" class="card">
-      <h2>Business Login</h2>
-      <form id="loginForm">
-        <div class="form-group">
-          <label>Business Slug</label>
-          <input type="text" id="loginSlug" value="titusville-mill" required>
-        </div>
-        <div class="form-group">
-          <label>PIN</label>
-          <input type="password" id="loginPin" value="admin" required>
-        </div>
-        <button type="submit">Login</button>
-      </form>
-    </div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="meg" viewBox="0 0 100 100"><path d="M22 44 H32 L62 30 V70 L32 56 H22 Z M40 56 h11 v9 a5.5 5.5 0 0 1 -11 0 Z" /><path d="M70 38 q10 12 0 24 l-3 -2 q8 -10 0 -20 Z M78 32 q16 18 0 36 l-3 -2 q13 -16 0 -32 Z" /></symbol>
+  <symbol id="star4" viewBox="0 0 24 24"><path d="M12 0 L14 10 L24 12 L14 14 L12 24 L10 14 L0 12 L10 10 Z" /></symbol>
+</defs></svg>
 
-    <!-- Dashboard -->
-    <div id="dashboardSection" class="hidden">
-      <div class="card">
-        <h2 id="businessName">Dashboard</h2>
-        <button id="logoutBtn" style="background: transparent; border: 1px solid var(--border); margin-bottom: 16px;">Logout</button>
-        
-        <form id="postForm">
-          <div class="form-group">
-            <label>Type</label>
-            <select id="postType" required>
-              <option value="announcement">Announcement</option>
-              <option value="event">Event</option>
-              <option value="special">Daily Special</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Title (Optional)</label>
-            <input type="text" id="postTitle">
-          </div>
-          <div class="form-group">
-            <label>Content</label>
-            <textarea id="postContent" rows="4" required></textarea>
-          </div>
-          <div class="form-group">
-            <label>Link URL (Optional)</label>
-            <input type="url" id="postLink">
-          </div>
-          <div class="form-group">
-            <label>Expires At (Optional for Events/Specials)</label>
-            <input type="datetime-local" id="postExpires">
-          </div>
-          <button type="submit">Publish Update</button>
-        </form>
-      </div>
-
-      <div class="card">
-        <h2>Active Posts</h2>
-        <div id="postsList">Loading...</div>
-      </div>
-    </div>
+<nav class="nav" id="nav">
+  <div class="container nav__in">
+    <a href="#top" class="lock">
+      <svg class="lock__mark" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#1c1a18" stroke="rgba(200,169,106,.4)" /><use href="#meg" x="12" y="12" width="76" height="76" fill="var(--gold)" /></svg>
+      <span style="display:flex;flex-direction:column;line-height:1"><span class="lock__name">The Herald</span><span class="lock__sub">by Forever Still Studio</span></span>
+    </a>
+    <a href="/admin" class="navcta">Sign in</a>
   </div>
+</nav>
 
-  <script>
-    let token = localStorage.getItem('herald_token');
-    let currentSlug = localStorage.getItem('herald_slug');
+<main id="top">
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero__glow" aria-hidden="true"></div>
+    <div class="sparkles" aria-hidden="true">
+      <span class="spk" style="top:22%;left:13%;width:16px;height:16px;--dur:9s;--delay:0s;--max:.6"><svg viewBox="0 0 24 24"><use href="#star4"/></svg></span>
+      <span class="spk" style="top:30%;left:82%;width:20px;height:20px;--dur:11s;--delay:1.6s;--max:.5"><svg viewBox="0 0 24 24"><use href="#star4"/></svg></span>
+      <span class="spk" style="top:68%;left:24%;width:12px;height:12px;--dur:8s;--delay:3.2s;--max:.55"><svg viewBox="0 0 24 24"><use href="#star4"/></svg></span>
+    </div>
+    <div class="container hero__in">
+      <span class="script">The Herald</span>
+      <h1 class="tag">Keep your site fresh, <em>without touching it.</em></h1>
+      <p class="head">Your social posts, announcements &amp; hours — live on your site</p>
+      <p class="sub">The Herald drops one tiny script into the website you already have. Connect your Instagram and Facebook so your latest posts show up automatically — then add a "Closed for snow" banner or change your hours from your phone. All live on your site in seconds, matched to your brand. No website-builder login, no developer.</p>
+      <div class="ctas">
+        <a class="btn btn--p" href="#how">See how it works</a>
+        <a class="btn btn--g" href="#get">Get it on your site</a>
+      </div>
+      <div class="trust">Auto-sync your socials · Announcements &amp; hours · No builder login</div>
+    </div>
+  </section>
 
-    const ui = {
-      login: document.getElementById('loginSection'),
-      dash: document.getElementById('dashboardSection'),
-      msg: document.getElementById('message'),
-      posts: document.getElementById('postsList'),
-      bizName: document.getElementById('businessName')
-    };
+  <!-- HOW -->
+  <section class="cream" id="how">
+    <div class="container">
+      <div class="sec"><span class="eyebrow">How it works</span><div class="rule"></div><h2>One script. <em>Then just post.</em></h2></div>
+      <div class="steps">
+        <div class="step"><div class="n">01</div><h3>One line on your site</h3><p>I add a tiny <code>herald-sync.js</code> snippet to the website you already have. Once, in five minutes — no rebuild.</p></div>
+        <div class="step"><div class="n">02</div><h3>Connect &amp; post</h3><p>Link your Instagram &amp; Facebook once so new posts flow in automatically — and type announcements or flip your hours anytime from your phone.</p></div>
+        <div class="step"><div class="n">03</div><h3>It shows up live</h3><p>Your latest posts, banners, and hours appear on your site within seconds, styled to match your brand. No logging into a website builder.</p></div>
+      </div>
+    </div>
+  </section>
 
-    function showMsg(text, isError = false) {
-      ui.msg.textContent = text;
-      ui.msg.className = isError ? 'error' : 'success';
-      setTimeout(() => ui.msg.className = '', 3000);
-    }
+  <!-- WHY -->
+  <section class="cream" id="why" style="border-top:none">
+    <div class="container">
+      <div class="sec"><span class="eyebrow">Why shops use it</span><div class="rule"></div><h2>The easiest part of <em>your website.</em></h2></div>
+      <div class="why">
+        <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.4"/><circle cx="17.2" cy="9.6" r="0.7" fill="var(--gold)" stroke="none"/></svg></div><div><h4>Your Instagram &amp; Facebook, automatically</h4><p>Connect once and your newest posts mirror straight onto your website. Your site stays fresh while you just post like you already do.</p></div></div>
+        <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-4 4z"/><path d="M8 9h8M8 12h5"/></svg></div><div><h4>Announcements &amp; live hours</h4><p>Drop a banner or change today's hours from your phone — "Closed for snow," "Open till 9," "Back at 2pm."</p></div></div>
+        <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/><circle cx="6" cy="7" r="0.7" fill="var(--gold)" stroke="none"/></svg></div><div><h4>Works on the site you have</h4><p>WordPress, Wix, Squarespace, a custom build — anything. One tiny script, no migration, no rebuild.</p></div></div>
+        <div class="card"><div class="ic"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div><div><h4>On-brand, live in seconds</h4><p>Everything matches your colors and theme and appears the moment you post — and comes down just as fast.</p></div></div>
+      </div>
+    </div>
+  </section>
 
-    function checkAuth() {
-      if (token && currentSlug) {
-        ui.login.classList.add('hidden');
-        ui.dash.classList.remove('hidden');
-        ui.bizName.textContent = currentSlug.toUpperCase();
-        loadPosts();
-      } else {
-        ui.login.classList.remove('hidden');
-        ui.dash.classList.add('hidden');
-      }
-    }
+  <!-- FAMILY -->
+  <section class="family" id="family">
+    <div class="container container--narrow">
+      <p class="eyebrow">Part of the Forever Still family</p>
+      <h2>Quietly powerful tools, <em>built by a real person.</em></h2>
+      <p>The Herald is made by <a href="https://www.foreverstillstudio.com" target="_blank" rel="noopener" style="color:var(--gold)">Forever Still Studio</a> — boutique web design and software for local businesses. Same care, same hands-on support, same person who answers her own phone.</p>
+      <div class="sibs">
+        <span class="sib"><b>The Herald</b> · announcements</span>
+        <span class="sib"><b>Drawbridge</b> · live menus</span>
+        <span class="sib"><b>Belltower</b> · booking</span>
+        <span class="sib"><b>The Hearth</b> · reviews</span>
+        <span class="sib"><b>The Forge</b> · design-it-yourself</span>
+      </div>
+    </div>
+  </section>
 
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const slug = document.getElementById('loginSlug').value;
-      const pin = document.getElementById('loginPin').value;
+  <!-- CTA -->
+  <section class="cta" id="get">
+    <div class="container container--narrow">
+      <div class="cta__script">want it on your site?</div>
+      <h2>Let's get you <em>posting.</em></h2>
+      <p>Tell me where your website lives and I'll wire up The Herald — usually same day. It's also included with TownSquare, the hub for all your Forever Still tools.</p>
+      <a class="btn btn--p" href="mailto:chrissy@foreverstillstudio.com?subject=The%20Herald%20%E2%80%94%20set%20me%20up&body=Hi%20Chrissy%20%E2%80%94%20I%27d%20love%20The%20Herald%20on%20my%20site.%20My%20website%3A%20">Email to get set up</a>
+      <p class="cta__alt">Already set up? <a href="/admin">Sign in to post →</a></p>
+    </div>
+  </section>
+</main>
 
-      try {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slug, pin })
-        });
-        const data = await res.json();
-        
-        if (data.token) {
-          token = data.token;
-          currentSlug = slug;
-          localStorage.setItem('herald_token', token);
-          localStorage.setItem('herald_slug', slug);
-          showMsg('Logged in successfully');
-          checkAuth();
-        } else {
-          showMsg(data.error || 'Login failed', true);
-        }
-      } catch (err) {
-        showMsg('Network error', true);
-      }
-    });
+<footer>
+  <div class="container">
+    <svg class="foot__mark" viewBox="0 0 100 100"><use href="#meg" fill="var(--gold)" /></svg>
+    <div class="foot__brand">The <span>Herald</span></div>
+    <p>By <a href="https://www.foreverstillstudio.com" target="_blank" rel="noopener">Forever Still Studio</a> · announcements &amp; live hours for your website</p>
+  </div>
+</footer>
 
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-      token = null; currentSlug = null;
-      localStorage.removeItem('herald_token');
-      localStorage.removeItem('herald_slug');
-      checkAuth();
-    });
-
-    document.getElementById('postForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const payload = {
-        type: document.getElementById('postType').value,
-        title: document.getElementById('postTitle').value,
-        content: document.getElementById('postContent').value,
-        link_url: document.getElementById('postLink').value,
-        expires_at: document.getElementById('postExpires').value ? new Date(document.getElementById('postExpires').value).toISOString() : null
-      };
-
-      try {
-        const res = await fetch(`/api/businesses/${currentSlug}/posts`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (data.success) {
-          showMsg('Post published!');
-          document.getElementById('postForm').reset();
-          loadPosts();
-        } else {
-          showMsg(data.error || 'Failed to post', true);
-        }
-      } catch (err) {
-        showMsg('Network error', true);
-      }
-    });
-
-    async function loadPosts() {
-      ui.posts.innerHTML = 'Loading...';
-      try {
-        const res = await fetch(`/api/public/businesses/${currentSlug}/posts`);
-        const data = await res.json();
-        
-        if (data.posts && data.posts.length > 0) {
-          ui.posts.innerHTML = data.posts.map(p => `
-            <div class="post-item">
-              <div class="post-meta">
-                <span><strong style="text-transform:uppercase;color:var(--primary)">${p.type}</strong> ${p.title ? `- ${p.title}` : ''}</span>
-                <button class="danger" onclick="deletePost(${p.id})">Delete</button>
-              </div>
-              <p style="margin: 8px 0;">${p.content}</p>
-              ${p.expires_at ? `<div class="post-meta">Expires: ${new Date(p.expires_at).toLocaleString()}</div>` : ''}
-            </div>
-          `).join('');
-        } else {
-          ui.posts.innerHTML = '<div class="post-meta">No active posts.</div>';
-        }
-      } catch (err) {
-        ui.posts.innerHTML = '<div class="error">Failed to load posts</div>';
-      }
-    }
-
-    async function deletePost(id) {
-      if (!confirm('Delete this post?')) return;
-      try {
-        const res = await fetch(`/api/businesses/${currentSlug}/posts/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (data.success) {
-          showMsg('Post deleted');
-          loadPosts();
-        }
-      } catch (err) {
-        showMsg('Network error', true);
-      }
-    }
-
-    checkAuth();
-  </script>
+<script>
+  var nav=document.getElementById('nav');
+  addEventListener('scroll',function(){ nav.classList.toggle('scrolled', scrollY>40); },{passive:true});
+</script>
 </body>
 </html>
