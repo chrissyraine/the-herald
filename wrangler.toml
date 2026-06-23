@@ -1,0 +1,15 @@
+name = "theherald"
+compatibility_date = "2025-04-25"
+compatibility_flags = ["nodejs_compat"]
+
+pages_build_output_dir = "public"
+
+# Secrets are NOT committed. Set them once per project with:
+#   wrangler pages secret put ADMIN_PIN_HASH --project-name theherald
+#   wrangler pages secret put SESSION_SECRET --project-name theherald
+
+# Uncomment and update the database_id after running: npx wrangler d1 create herald
+[[d1_databases]]
+binding = "DB"
+database_name = "herald"
+database_id = "869c2b31-c12b-405e-ab44-858acd91a7cf"

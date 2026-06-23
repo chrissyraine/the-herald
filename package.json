@@ -1,0 +1,14 @@
+{
+  "name": "theherald",
+  "version": "1.0.0",
+  "description": "Content Syndication Layer for TownSquare",
+  "scripts": {
+    "dev": "wrangler pages dev public",
+    "build": "echo 'No build step needed'",
+    "deploy": "wrangler pages deploy public",
+    "db:init": "wrangler d1 execute herald --local --file=./schema.sql"
+  },
+  "dependencies": {
+    "wrangler": "latest"
+  }
+}
