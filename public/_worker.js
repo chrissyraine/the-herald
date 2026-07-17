@@ -62,43 +62,20 @@ export default {
         const todayDateStr = new Date().toISOString().split('T')[0];
         
         let hours = await env.DB.prepare(
-          `SELECT open_time, close_time, is_closed, override_status, override_note, override_date 
+          `SELECT open_time, close_time, is_closed, override_status, override_note, override_date, is_24h, appointment_only
            FROM operating_hours WHERE business_id = ? AND day_of_week = ?`
         ).bind(business.id, todayIdx).first();
 
-        // Resolve today's status.
-        //
-        // status is one of: 'unknown' | 'open' | 'closed' | 'open_special'
-        //
-        // 'unknown' = this tenant has never set hours for today. It used to fall through to
-        // 'open', which put a green "Open" pill on a brand-new client's live site for a
-        // business that might be shut. Saying nothing is honest; guessing open is not.
-        // Consumers should hide the pill on 'unknown'. (2026-07-16)
-        // Note the middle case: a row can exist WITHOUT real hours, because setting an
-        // override upserts a row carrying only the override columns. Once that override
-        // expires, is_closed defaults to 0 — which would read as 'open' for a tenant who
-        // never entered hours at all. So "open" requires actual open/close times.
-        let currentStatus;
-        if (!hours) {
-          currentStatus = 'unknown';                    // never configured
-        } else if (hours.is_closed) {
-          currentStatus = 'closed';                     // explicitly closed today
-        } else if (hours.open_time && hours.close_time) {
-          currentStatus = 'open';                       // real hours on file
-        } else {
-          currentStatus = 'unknown';                    // row exists, hours never filled in
-        }
+        // A dated exception for TODAY takes priority over everything below (weekly
+        // hours AND the day-of-week override) — it's the newer, richer path for
+        // "this specific date is different," e.g. a holiday closure announced in
+        // advance. See migrate-add-hours-exceptions.sql.
+        const todayException = await env.DB.prepare(
+          'SELECT status, open_time, close_time, note FROM hours_exceptions WHERE business_id = ? AND exception_date = ?'
+        ).bind(business.id, todayDateStr).first();
 
-        let currentNote = null;
-        // A same-day override wins — but only if it carries a status we recognise. The
-        // owner UI sends 'closed' or 'open_special'; anything else means the row is
-        // malformed, and we'd rather fall back to the regular hours than emit a status no
-        // website knows how to render.
-        if (hours && hours.override_date === todayDateStr &&
-            (hours.override_status === 'closed' || hours.override_status === 'open_special')) {
-          currentStatus = hours.override_status;
-          currentNote = hours.override_note;
-        }
+        const { status: currentStatus, open_time: currentOpenTime, close_time: currentCloseTime, note: currentNote } =
+          computeHoursStatus(hours, todayException, todayDateStr);
 
         // Social feed — DELIBERATELY EMPTY. Instagram/Facebook sync is not built.
         //
@@ -132,9 +109,11 @@ export default {
           announcement: announcement ? { text: announcement.text, expires_at: announcement.expires_at } : null,
           hours: {
             status: currentStatus,
-            open_time: hours?.open_time,
-            close_time: hours?.close_time,
-            note: currentNote
+            open_time: currentOpenTime,
+            close_time: currentCloseTime,
+            note: currentNote,
+            is_24h: !!(hours?.is_24h),
+            appointment_only: !!(hours?.appointment_only)
           },
           social_feed: socialFeed,
           posts: posts
@@ -289,6 +268,91 @@ export default {
           return json({ success: true });
         }
 
+        // Full weekly hours schedule (TownSquare's Hours manager, via the broker).
+        // Additive to the existing today-only override above — override_* columns
+        // and the /hours/override route are untouched by this.
+        if (action === 'hours/week' && method === 'GET') {
+          const rows = await env.DB.prepare(
+            'SELECT day_of_week, open_time, close_time, is_closed, is_24h, appointment_only FROM operating_hours WHERE business_id = ? ORDER BY day_of_week'
+          ).bind(business.id).all();
+          const byDay = new Map((rows.results || []).map((r) => [r.day_of_week, r]));
+          const week = [];
+          for (let d = 0; d < 7; d++) {
+            const r = byDay.get(d);
+            week.push({
+              day_of_week: d,
+              open_time: r?.open_time ?? null,
+              close_time: r?.close_time ?? null,
+              is_closed: !!(r?.is_closed),
+              is_24h: !!(r?.is_24h),
+              appointment_only: !!(r?.appointment_only),
+            });
+          }
+          return json({ week });
+        }
+        if (action === 'hours/week' && method === 'PUT') {
+          const { week } = await request.json();
+          if (!Array.isArray(week) || week.length !== 7) return json({ error: 'week must be an array of 7 days' }, 400);
+          for (const d of week) {
+            const dow = Number(d.day_of_week);
+            if (!Number.isInteger(dow) || dow < 0 || dow > 6) continue;
+            await env.DB.prepare(
+              `INSERT INTO operating_hours (business_id, day_of_week, open_time, close_time, is_closed, is_24h, appointment_only)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(business_id, day_of_week) DO UPDATE SET
+                 open_time = excluded.open_time,
+                 close_time = excluded.close_time,
+                 is_closed = excluded.is_closed,
+                 is_24h = excluded.is_24h,
+                 appointment_only = excluded.appointment_only`
+            ).bind(
+              business.id, dow,
+              d.is_closed || d.is_24h ? null : (d.open_time || null),
+              d.is_closed || d.is_24h ? null : (d.close_time || null),
+              d.is_closed ? 1 : 0,
+              d.is_24h ? 1 : 0,
+              d.appointment_only ? 1 : 0
+            ).run();
+          }
+          return json({ success: true });
+        }
+
+        // Dated special/holiday hours (future or past-any-date exceptions),
+        // independent of the day-of-week weekly schedule above.
+        if (action === 'hours/exceptions' && method === 'GET') {
+          const from = url.searchParams.get('from') || new Date().toISOString().split('T')[0];
+          const to = url.searchParams.get('to') || null;
+          const rows = to
+            ? await env.DB.prepare(
+                'SELECT id, exception_date, status, open_time, close_time, note FROM hours_exceptions WHERE business_id = ? AND exception_date >= ? AND exception_date <= ? ORDER BY exception_date'
+              ).bind(business.id, from, to).all()
+            : await env.DB.prepare(
+                'SELECT id, exception_date, status, open_time, close_time, note FROM hours_exceptions WHERE business_id = ? AND exception_date >= ? ORDER BY exception_date'
+              ).bind(business.id, from).all();
+          return json({ exceptions: rows.results || [] });
+        }
+        if (action === 'hours/exceptions' && method === 'POST') {
+          const { date, status, open_time, close_time, note } = await request.json();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ''))) return json({ error: 'date must be YYYY-MM-DD' }, 400);
+          if (!['closed', 'open_special', 'open_24h', 'appointment_only'].includes(status)) {
+            return json({ error: "status must be 'closed', 'open_special', 'open_24h', or 'appointment_only'" }, 400);
+          }
+          await env.DB.prepare(
+            `INSERT INTO hours_exceptions (business_id, exception_date, status, open_time, close_time, note)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(business_id, exception_date) DO UPDATE SET
+               status = excluded.status, open_time = excluded.open_time,
+               close_time = excluded.close_time, note = excluded.note`
+          ).bind(business.id, date, status, open_time || null, close_time || null, note || null).run();
+          return json({ success: true });
+        }
+        const exceptionDel = action.match(/^hours\/exceptions\/(\d{4}-\d{2}-\d{2})$/);
+        if (exceptionDel && method === 'DELETE') {
+          await env.DB.prepare('DELETE FROM hours_exceptions WHERE business_id = ? AND exception_date = ?')
+            .bind(business.id, exceptionDel[1]).run();
+          return json({ success: true });
+        }
+
         // Town Crier — owner self-posts (stream to titusvillesquare.com Town Crier)
         if (action === 'crier' && method === 'POST') {
           const { body, image_url } = await request.json();
@@ -348,6 +412,64 @@ export default {
 };
 
 // --- Helpers ---
+
+// Resolve today's hours status, given the weekly row, an optional dated
+// exception, and today's date string. Pure/extracted for unit testing —
+// no DB access, no Date.now() calls (the caller supplies todayDateStr).
+//
+// status is one of: 'unknown' | 'open' | 'closed' | 'open_special' | 'open_24h' | 'appointment_only'
+//
+// 'unknown' = this tenant has never set hours for today. It used to fall through to
+// 'open', which put a green "Open" pill on a brand-new client's live site for a
+// business that might be shut. Saying nothing is honest; guessing open is not.
+// Consumers should hide the pill on 'unknown'. (2026-07-16)
+// Note the middle case: a row can exist WITHOUT real hours, because setting an
+// override upserts a row carrying only the override columns. Once that override
+// expires, is_closed defaults to 0 — which would read as 'open' for a tenant who
+// never entered hours at all. So "open" requires actual open/close times.
+//
+// Precedence (highest wins): dated exception for today > same-day override > weekly hours.
+function computeHoursStatus(hours, todayException, todayDateStr) {
+  let status;
+  if (!hours) {
+    status = 'unknown';
+  } else if (hours.is_24h) {
+    status = 'open_24h';
+  } else if (hours.appointment_only) {
+    status = 'appointment_only';
+  } else if (hours.is_closed) {
+    status = 'closed';
+  } else if (hours.open_time && hours.close_time) {
+    status = 'open';
+  } else {
+    status = 'unknown';
+  }
+
+  let open_time = hours?.open_time ?? null, close_time = hours?.close_time ?? null, note = null;
+
+  // A same-day override wins — but only if it carries a status we recognise. The
+  // owner UI sends 'closed' or 'open_special'; anything else means the row is
+  // malformed, and we'd rather fall back to the regular hours than emit a status no
+  // website knows how to render.
+  if (hours && hours.override_date === todayDateStr &&
+      (hours.override_status === 'closed' || hours.override_status === 'open_special')) {
+    status = hours.override_status;
+    note = hours.override_note;
+  }
+
+  // A dated exception for today wins over BOTH the weekly hours and the
+  // same-day override above — it's the richer, purpose-built path for a
+  // specific calendar date (see migrate-add-hours-exceptions.sql).
+  if (todayException) {
+    status = todayException.status;
+    open_time = todayException.open_time || open_time;
+    close_time = todayException.close_time || close_time;
+    note = todayException.note || note;
+  }
+
+  return { status, open_time, close_time, note };
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -399,3 +521,6 @@ function requireBusiness(request, env, slug) {
   if (a.scope === 'admin') return true;
   return a.scope === 'business' && a.slug === slug;
 }
+
+// ---- named exports for unit tests (alongside the default Pages export) ----
+export { computeHoursStatus, hashPin, signToken, verifyToken };

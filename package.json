@@ -6,9 +6,14 @@
     "dev": "wrangler pages dev public",
     "build": "echo 'No build step needed'",
     "deploy": "wrangler pages deploy public",
-    "db:init": "wrangler d1 execute herald --local --file=./schema.sql"
+    "db:init": "wrangler d1 execute herald --local --file=./schema.sql",
+    "test": "vitest run"
   },
+  "type": "module",
   "dependencies": {
     "wrangler": "latest"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
   }
 }
