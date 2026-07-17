@@ -66,24 +66,66 @@ export default {
            FROM operating_hours WHERE business_id = ? AND day_of_week = ?`
         ).bind(business.id, todayIdx).first();
 
-        // Apply Override if date matches today
-        let currentStatus = hours && hours.is_closed ? 'closed' : 'open';
+        // Resolve today's status.
+        //
+        // status is one of: 'unknown' | 'open' | 'closed' | 'open_special'
+        //
+        // 'unknown' = this tenant has never set hours for today. It used to fall through to
+        // 'open', which put a green "Open" pill on a brand-new client's live site for a
+        // business that might be shut. Saying nothing is honest; guessing open is not.
+        // Consumers should hide the pill on 'unknown'. (2026-07-16)
+        // Note the middle case: a row can exist WITHOUT real hours, because setting an
+        // override upserts a row carrying only the override columns. Once that override
+        // expires, is_closed defaults to 0 — which would read as 'open' for a tenant who
+        // never entered hours at all. So "open" requires actual open/close times.
+        let currentStatus;
+        if (!hours) {
+          currentStatus = 'unknown';                    // never configured
+        } else if (hours.is_closed) {
+          currentStatus = 'closed';                     // explicitly closed today
+        } else if (hours.open_time && hours.close_time) {
+          currentStatus = 'open';                       // real hours on file
+        } else {
+          currentStatus = 'unknown';                    // row exists, hours never filled in
+        }
+
         let currentNote = null;
-        if (hours && hours.override_date === todayDateStr) {
+        // A same-day override wins — but only if it carries a status we recognise. The
+        // owner UI sends 'closed' or 'open_special'; anything else means the row is
+        // malformed, and we'd rather fall back to the regular hours than emit a status no
+        // website knows how to render.
+        if (hours && hours.override_date === todayDateStr &&
+            (hours.override_status === 'closed' || hours.override_status === 'open_special')) {
           currentStatus = hours.override_status;
           currentNote = hours.override_note;
         }
 
-        // Fetch Social Feed (mocking fetch from Meta Graph API since we don't have secrets injected)
-        // In reality, we'd use the access_token from `meta_connections` and do:
-        // fetch(`https://graph.instagram.com/me/media?fields=id,caption,media_url,timestamp&access_token=${token}`)
-        const metaConnection = await env.DB.prepare(
-          `SELECT platform FROM meta_connections WHERE business_id = ?`
-        ).bind(business.id).first();
+        // Social feed — DELIBERATELY EMPTY. Instagram/Facebook sync is not built.
+        //
+        // This used to fabricate a post ("Latest post synced from social!") whenever a
+        // meta_connections row existed, and serve it on the tenant's own website as if the
+        // owner had written it. Publishing invented words under a client's name is not a
+        // placeholder, it's a lie with their name on it. Removed 2026-07-16.
+        //
+        // To actually ship this (see C:\foreverstill\integrations-roadmap.md):
+        //   1. Meta Developer App + App Review (pages_read_engagement / pages_show_list,
+        //      instagram_basic). The Connect button in townsquare's HeraldModule.jsx still
+        //      writes a mock token, so no real token has ever reached meta_connections.
+        //   2. Then fetch here with the stored access_token, e.g.
+        //      graph.instagram.com/me/media?fields=id,caption,media_url,timestamp
+        //   3. Return [] on any error — a client's site must never depend on Meta being up.
+        //
+        // Until step 1 is real, this stays []. Do not "helpfully" restore the mock.
+        const socialFeed = [];
 
-        const socialFeed = metaConnection ? [
-          { platform: metaConnection.platform, id: '123', caption: 'Latest post synced from social!', timestamp: new Date().toISOString() }
-        ] : [];
+        // Town Crier posts: owner self-posts (newest first). Facebook posts merge in
+        // here once a facebook connection with page_id + token exists.
+        const postRows = await env.DB.prepare(
+          'SELECT body, image_url, source, created_at FROM crier_posts WHERE business_id = ? ORDER BY created_at DESC LIMIT 10'
+        ).bind(business.id).all();
+        const posts = (postRows.results || []).map((p) => ({
+          text: p.body, image: p.image_url || null, source: p.source || 'owner', created_at: p.created_at
+        }));
 
         return json({
           business: { name: business.name, slug: slug },
@@ -94,8 +136,98 @@ export default {
             close_time: hours?.close_time,
             note: currentNote
           },
-          social_feed: socialFeed
+          social_feed: socialFeed,
+          posts: posts
         });
+      }
+
+      // Facebook Page photos for a client's gallery (multi-tenant, cached 30 min, CORS).
+      // Creds (page_id + access_token) come from meta_connections for the business slug.
+      // Returns { photos: [] } if not connected or on any error, so the site keeps its own photos.
+      const fbPhotosMatch = path.match(/^\/api\/public\/businesses\/([^\/]+)\/fb-photos$/);
+      if (fbPhotosMatch && method === 'GET') {
+        const slug = fbPhotosMatch[1];
+        const business = await env.DB.prepare('SELECT id FROM businesses WHERE slug = ?').bind(slug).first();
+        if (!business) return json({ photos: [], note: 'unknown business' });
+        const conn = await env.DB.prepare(
+          "SELECT page_id, access_token FROM meta_connections WHERE business_id = ? AND platform = 'facebook'"
+        ).bind(business.id).first();
+        if (!conn || !conn.page_id || !conn.access_token) return json({ photos: [], note: 'not configured' });
+        const pageId = conn.page_id, token = conn.access_token;
+
+        const cache = caches.default;
+        const cacheKey = new Request('https://cache.local/herald-fb/v1/' + slug);
+        const hit = await cache.match(cacheKey);
+        if (hit) return hit;
+
+        const limit = Math.min(24, parseInt(url.searchParams.get('limit') || '12', 10) || 12);
+        const fetchCount = Math.min(50, limit * 4);
+        const source = url.searchParams.get('source') || 'posts';  // 'album' = uploaded Photos only (skip timeline posts)
+        const postsApi = 'https://graph.facebook.com/v21.0/' + pageId +
+          '/posts?fields=full_picture,permalink_url,message,attachments{media_type,media,subattachments{media}}' +
+          '&limit=' + fetchCount + '&access_token=' + encodeURIComponent(token);
+        const fromMedia = function (m) {
+          if (m && m.image && m.image.src) return { src: m.image.src, thumb: m.image.src };
+          return null;
+        };
+        let photos = [];
+        try {
+          if (source !== 'album') {
+          const r = await fetch(postsApi);
+          const data = await r.json();
+          if (data && Array.isArray(data.data)) {
+            const seen = new Set();
+            for (const post of data.data) {
+              const postPhotos = [];
+              if (post.attachments && Array.isArray(post.attachments.data)) {
+                for (const att of post.attachments.data) {
+                  if (att.subattachments && Array.isArray(att.subattachments.data)) {
+                    for (const sub of att.subattachments.data) {
+                      const p = fromMedia(sub.media); if (p) postPhotos.push(p);
+                    }
+                  } else if (att.media_type === 'photo') {
+                    const p = fromMedia(att.media); if (p) postPhotos.push(p);
+                  }
+                }
+              }
+              if (!postPhotos.length && post.full_picture) {
+                postPhotos.push({ src: post.full_picture, thumb: post.full_picture });
+              }
+              const caption = ((post.message || '').split('\n')[0] || '').slice(0, 140);
+              const link = post.permalink_url || null;
+              for (const p of postPhotos) {
+                if (seen.has(p.src)) continue;
+                seen.add(p.src);
+                photos.push({ src: p.src, thumb: p.thumb, link: link, caption: caption });
+                if (photos.length >= limit) break;
+              }
+              if (photos.length >= limit) break;
+            }
+          }
+          }
+          if (!photos.length) {
+            const photosApi = 'https://graph.facebook.com/v21.0/' + pageId +
+              '/photos?type=uploaded&fields=images,link,name,created_time&limit=' + limit +
+              '&access_token=' + encodeURIComponent(token);
+            const r2 = await fetch(photosApi);
+            const data2 = await r2.json();
+            if (data2 && Array.isArray(data2.data)) {
+              photos = data2.data.map(function (p) {
+                const imgs = (p.images || []).slice().sort(function (a, b) { return b.width - a.width; });
+                const full = imgs[0] ? imgs[0].source : null;
+                const thumbObj = imgs.find(function (i) { return i.width <= 600; }) || imgs[imgs.length - 1] || imgs[0] || {};
+                return full ? { src: full, thumb: thumbObj.source || full, link: p.link || null, caption: p.name || '' } : null;
+              }).filter(Boolean);
+            }
+          }
+        } catch (e) { photos = []; }
+
+        const out = new Response(JSON.stringify({ photos: photos }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=1800' }
+        });
+        ctx.waitUntil(cache.put(cacheKey, out.clone()));
+        return out;
       }
 
       // --- Protected Owner Hub API ---
@@ -121,36 +253,88 @@ export default {
         }
 
         // Save Hours Override
+        //
+        // These were plain UPDATEs. A tenant with no operating_hours row for today matched
+        // nothing, changed 0 rows, and still returned success — so an owner could set
+        // "Closed today", see it save, and watch their site keep saying Open. The write is
+        // now an upsert (operating_hours has UNIQUE(business_id, day_of_week)), so the
+        // override lands whether or not regular hours were ever entered. (2026-07-16)
         if (action === 'hours/override' && method === 'POST') {
           const { active, status, note } = await request.json();
           const todayIdx = new Date().getDay();
           const todayDateStr = new Date().toISOString().split('T')[0];
-          
+
           if (active) {
+            // Only statuses the public feed can render — otherwise the override is ignored
+            // downstream and we'd be lying about having saved it.
+            if (status !== 'closed' && status !== 'open_special') {
+              return json({ error: "status must be 'closed' or 'open_special'" }, 400);
+            }
             await env.DB.prepare(
-              `UPDATE operating_hours SET override_status = ?, override_note = ?, override_date = ? 
-               WHERE business_id = ? AND day_of_week = ?`
-            ).bind(status, note, todayDateStr, business.id, todayIdx).run();
+              `INSERT INTO operating_hours (business_id, day_of_week, override_status, override_note, override_date)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(business_id, day_of_week) DO UPDATE SET
+                 override_status = excluded.override_status,
+                 override_note   = excluded.override_note,
+                 override_date   = excluded.override_date`
+            ).bind(business.id, todayIdx, status, note || null, todayDateStr).run();
           } else {
+            // Clearing an override on a day that has no row is a no-op by definition —
+            // there's nothing to clear. No upsert needed.
             await env.DB.prepare(
-              `UPDATE operating_hours SET override_status = NULL, override_note = NULL, override_date = NULL 
+              `UPDATE operating_hours SET override_status = NULL, override_note = NULL, override_date = NULL
                WHERE business_id = ? AND day_of_week = ?`
             ).bind(business.id, todayIdx).run();
           }
           return json({ success: true });
         }
 
+        // Town Crier — owner self-posts (stream to titusvillesquare.com Town Crier)
+        if (action === 'crier' && method === 'POST') {
+          const { body, image_url } = await request.json();
+          const text = (body || '').trim();
+          if (!text) return json({ error: 'empty' }, 400);
+          // Daily cap — keeps the shared Town Crier from getting spammy. Counts a
+          // rolling 24h window. Change DAILY_CRIER_LIMIT to adjust. The official
+          // Titusville Square account is exempt so spotlights are never blocked.
+          const DAILY_CRIER_LIMIT = 2;
+          if (slug !== 'titusville-square') {
+            const used = await env.DB.prepare(
+              "SELECT COUNT(*) AS n FROM crier_posts WHERE business_id = ? AND created_at >= datetime('now','-1 day')"
+            ).bind(business.id).first();
+            if (used && used.n >= DAILY_CRIER_LIMIT) {
+              return json({ error: `You've reached today's limit of ${DAILY_CRIER_LIMIT} Town Crier posts. You can post again in 24 hours.` }, 429);
+            }
+          }
+          await env.DB.prepare(
+            "INSERT INTO crier_posts (business_id, body, image_url, source) VALUES (?, ?, ?, 'owner')"
+          ).bind(business.id, text.slice(0, 1000), image_url || null).run();
+          return json({ success: true });
+        }
+        if (action === 'crier' && method === 'GET') {
+          const rows = await env.DB.prepare(
+            'SELECT id, body, image_url, source, created_at FROM crier_posts WHERE business_id = ? ORDER BY created_at DESC LIMIT 20'
+          ).bind(business.id).all();
+          return json({ posts: rows.results || [] });
+        }
+        const crierDel = action.match(/^crier\/(\d+)$/);
+        if (crierDel && method === 'DELETE') {
+          await env.DB.prepare('DELETE FROM crier_posts WHERE id = ? AND business_id = ?')
+            .bind(crierDel[1], business.id).run();
+          return json({ success: true });
+        }
+
         // Save Meta Auth Token
         if (action === 'meta-auth' && method === 'POST') {
-          const { platform, access_token, expires_in_days } = await request.json();
-          const expiresAt = new Date(Date.now() + expires_in_days * 24 * 60 * 60 * 1000).toISOString();
-          
+          const { platform, page_id, access_token, expires_in_days } = await request.json();
+          const expiresAt = new Date(Date.now() + (expires_in_days || 60) * 24 * 60 * 60 * 1000).toISOString();
+
           await env.DB.prepare(
-            `INSERT INTO meta_connections (business_id, platform, access_token, expires_at)
-             VALUES (?, ?, ?, ?)
-             ON CONFLICT(business_id, platform) DO UPDATE SET 
-             access_token=excluded.access_token, expires_at=excluded.expires_at, updated_at=CURRENT_TIMESTAMP`
-          ).bind(business.id, platform, access_token, expiresAt).run();
+            `INSERT INTO meta_connections (business_id, platform, page_id, access_token, expires_at)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(business_id, platform) DO UPDATE SET
+             page_id=excluded.page_id, access_token=excluded.access_token, expires_at=excluded.expires_at, updated_at=CURRENT_TIMESTAMP`
+          ).bind(business.id, platform, page_id || null, access_token, expiresAt).run();
           return json({ success: true });
         }
       }
