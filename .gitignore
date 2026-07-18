@@ -5,3 +5,7 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+
+# One-off provisioning scripts (contain PIN hashes, sometimes plaintext PINs in
+# comments — brute-forceable for short PINs). Matches townsquare's seed*.sql precedent.
+set-*.sql
