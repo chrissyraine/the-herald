@@ -1,0 +1,39 @@
+/* ============================================================================
+   THE HERALD (landing) — HOUSEBOOKER SKIN
+   Re-tints the gettheherald.app marketing page to the Forever Still house look
+   — warm ivory + gilt + Cinzel/Jost — by remapping this page's own inline
+   custom properties to the warm values. The gold accent (--gold and its
+   family) and the decorative Tangerine script are LEFT untouched, so the
+   brand keeps its shimmer. Additive + reversible: loaded last so it wins,
+   no markup or JS changed. Source: C:\foreverstill\housebooker-ui\
+   ============================================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Jost:wght@300;400;500;600&display=swap');
+
+:root{
+  /* surfaces: near-black -> warm ivory */
+  --bg:#f2ead6; --bg-soft:#faf4e5; --bg-warm:#faf4e5;
+  --cream:#faf4e5;
+  /* text: cream -> ink */
+  --text:#26221c; --text-muted:#6b6152; --text-soft:#26221c;
+  --ink:#26221c; --ink-soft:#6b6152;
+  /* fine gilt hairline */
+  --rule:rgba(177,144,77,.28);
+  /* accent gold + blush LEFT as-is (brand) */
+  /* type: Cormorant/Montserrat -> Cinzel/Jost; Tangerine script kept */
+  --font-display:'Cinzel',Georgia,serif;
+  --font-sans:'Jost',system-ui,-apple-system,sans-serif;
+}
+
+/* warm page + a soft gilt glow at the very top, echoing the house pages */
+body{ background-color:var(--bg);
+  background-image:radial-gradient(circle at 50% 0%, rgba(177,144,77,.10) 0%, transparent 55%); }
+
+/* Cinzel wants a touch more presence than the old 300 weight */
+.tag, h2, .step h3, .why h4, .cta h2, .foot__brand{ font-weight:500; }
+
+/* the scrolled nav reads as warm stationery, not smoked glass */
+.nav.scrolled{ background:rgba(250,244,229,.92); border-bottom:1px solid var(--rule); }
+
+/* Consistency sweep: the hero H1 is the most prominent type on the page — force it
+   to the house display face even when a class-based rule would otherwise win. */
+h1 { font-family: 'Cinzel', Georgia, serif !important; }
